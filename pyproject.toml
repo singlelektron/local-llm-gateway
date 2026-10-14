@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "local-llm-gateway"
+version = "0.1.0"
+description = "Local-only Ollama routing and persistent usage accounting"
+requires-python = ">=3.12"
+dependencies = ["aiohttp>=3.14.0,<4"]
+
+[project.scripts]
+llm-gateway = "local_llm_gateway.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/local_llm_gateway"]
+
+[dependency-groups]
+dev = ["hatchling==1.27.0"]

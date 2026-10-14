@@ -1,0 +1,24 @@
+# Copy to gateway.local.toml and choose a model already installed in Ollama.
+[server]
+host = "127.0.0.1"
+port = 8787
+database = ".data/usage.sqlite3"
+timeout_seconds = 180
+max_concurrent = 4
+
+[backends.ollama]
+type = "ollama"
+url = "http://127.0.0.1:11434"
+
+[models.local-chat]
+backend = "ollama"
+model = "qwen2.5-coder:14b-instruct-q6_K"
+
+[clients.demo]
+default_model = "local-chat"
+
+[clients.second-app]
+default_model = "local-chat"
+
+[clients.desktop-companion]
+default_model = "local-chat"
