@@ -80,6 +80,16 @@ class OllamaBackendTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(body["stream"])
         self.assertIs(body["think"], False)
 
+    async def test_digest_uses_default_tag_without_confusing_registry_port(self):
+        for name in ("small", "team/small", "localhost:5000/team/small", "small:custom"):
+            canonical = name if name == "small:custom" else name + ":latest"
+            self.payloads["/api/tags"] = {"models": [{"name": canonical, "digest": "a" * 64}]}
+            with self.subTest(name=name):
+                await self.backend.verify_local(name, digest="a" * 64)
+                with self.assertRaises(GatewayError) as caught:
+                    await self.backend.verify_local(name, digest="b" * 64)
+                self.assertEqual(caught.exception.code, "model_identity_changed")
+
     async def test_missing_metrics_remain_unavailable(self):
         self.payloads["/api/chat"] = {"message": {"content": "hi"}, "done": True}
         result = (await self.collect())[0]

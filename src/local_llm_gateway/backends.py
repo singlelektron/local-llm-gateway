@@ -180,7 +180,10 @@ class OllamaBackend:
             installed = tags.get("models")
             if not isinstance(installed, list) or any(not isinstance(item, dict) for item in installed):
                 raise GatewayError(502, "backend_protocol_error")
-            if [item.get("digest") for item in installed if item.get("name") == model] != [digest]:
+            # Ollama resolves an omitted final tag to :latest. A registry's
+            # port is not a model tag (for example localhost:5000/team/model).
+            canonical = model if ":" in model.rsplit("/", 1)[-1] else model + ":latest"
+            if [item.get("digest") for item in installed if item.get("name") == canonical] != [digest]:
                 raise GatewayError(409, "model_identity_changed")
         metadata = await self._request_json("POST", "/api/show", {"model": model})
         details, info = metadata.get("details"), metadata.get("model_info")
