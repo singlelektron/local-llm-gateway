@@ -47,6 +47,10 @@ synchronous transactions to ensure cancellation cannot interrupt accounting; thi
 tradeoff targets personal usage, not high-throughput shared hosting. One server
 process owns one database. Default concurrency is four with immediate 429 overload.
 
-CLI and HTTP statistics satisfy the viewing requirement without a frontend.
+The owner requested a local statistics webpage after the initial MVP. A small
+server-rendered dashboard at `/` adds overview metrics, client/model breakdowns,
+daily request counts and recent outcomes, with filters and optional refresh.
+It uses only persisted metadata and adds no frontend framework, external assets,
+inference actions or browser script access. CLI and HTTP statistics remain available.
 Client IDs are configured attribution labels, not an authentication mechanism.
 Future adapter work must retain local routing and explicit missing-usage semantics.

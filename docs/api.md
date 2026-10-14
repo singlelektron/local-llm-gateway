@@ -6,12 +6,16 @@ Error messages are fixed categories, never upstream text. A chat response includ
 `X-Request-ID`, also stored as `id`. Authorization headers are neither used nor
 forwarded. No client-controlled upstream headers or URLs are accepted.
 
-Browsers may navigate directly to the five read-only GET endpoints below. Browser
+Browsers may navigate directly to the read-only GET endpoints below. Browser
 fetch/XHR, iframe navigation, Origin-bearing requests and inference submissions
 remain refused; no CORS access is enabled. Native HTTP clients remain supported.
 
 ## Endpoints
 
+- `GET /`: local HTML usage dashboard, with optional `client_id`, `actual_model`,
+  `backend`, `since`, `until`, and `refresh=1` (15-second page reload). Empty filter
+  values are ignored. Invalid/duplicate/unknown query parameters return HTML 400
+  with a validation message. No model call or statistics write occurs.
 - `GET /healthz`: gateway liveness and active request count.
 - `GET /v1/models`: configured model aliases (`object: list`). Does not trigger inference.
 - `POST /v1/chat/completions`: requires JSON and configured `X-Client-ID`.

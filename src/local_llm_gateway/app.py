@@ -12,6 +12,7 @@ from aiohttp import web
 
 from .backends import GatewayError, OllamaBackend
 from .config import Config, loopback_host
+from .dashboard import render_dashboard
 from .storage import Store
 
 CONFIG = web.AppKey("config", Config)
@@ -19,7 +20,7 @@ STORE = web.AppKey("store", Store)
 BACKENDS = web.AppKey("backends", dict)
 ACTIVE = web.AppKey("active", dict)
 MAX_BODY = 1024 * 1024
-READ_ONLY_PATHS = frozenset({"/healthz", "/v1/models", "/admin/backends", "/admin/stats", "/admin/requests"})
+READ_ONLY_PATHS = frozenset({"/", "/healthz", "/v1/models", "/admin/backends", "/admin/stats", "/admin/requests"})
 
 
 def encode(data):
@@ -283,6 +284,44 @@ async def recent(request):
     return web.json_response({"requests": request.app[STORE].recent(filters, int(request.query.get("limit", "50")))})
 
 
+async def dashboard(request):
+    store, config = request.app[STORE], request.app[CONFIG]
+    fields = {"client_id", "actual_model", "backend", "since", "until"}
+    filters, refresh, error = {}, False, None
+    try:
+        if set(request.query) - fields - {"refresh"} or any(len(request.query.getall(k)) != 1 for k in request.query):
+            raise ValueError
+        refresh = request.query.get("refresh") == "1"
+        if "refresh" in request.query and not refresh:
+            raise ValueError
+        filters = {k: v for k, v in request.query.items() if k in fields and v}
+        totals = store.aggregate(filters, [])[0]
+    except ValueError:
+        # Don't reflect arbitrary query/error text into the page or its logs.
+        filters, refresh = {}, False
+        error = "筛选条件无效。请检查日期范围，并使用页面中的筛选选项重试。"
+        totals = store.aggregate({}, [])[0]
+    client_history = store.aggregate({}, ["client_id"])
+    model_history = store.aggregate({}, ["model", "backend"])
+    choices = {
+        "client_id": sorted(set(config.clients) | {r["client_id"] for r in client_history if r["client_id"]}),
+        "actual_model": sorted({r["model"] for r in config.models.values()} | {r["model"] for r in model_history if r["model"]}),
+        "backend": sorted(set(config.backends) | {r["backend"] for r in model_history if r["backend"]}),
+    }
+    page = render_dashboard(
+        totals=totals, clients=store.aggregate(filters, ["client_id"]),
+        models=store.aggregate(filters, ["model", "backend"]), daily=store.aggregate(filters, ["date"]),
+        recent=store.recent(filters, 30), filters=filters, choices=choices,
+        active_requests=request.app[ACTIVE]["count"], now=datetime.now(timezone.utc),
+        refresh=refresh, error=error,
+    )
+    return web.Response(text=page, content_type="text/html", status=400 if error else 200, headers={
+        "Cache-Control": "no-store",
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+        "X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer",
+    })
+
+
 def create_app(config):
     app = web.Application(middlewares=[boundary], client_max_size=MAX_BODY, handler_args={"handler_cancellation": True})
     app[CONFIG] = config
@@ -304,7 +343,7 @@ def create_app(config):
             store.close()
 
     app.cleanup_ctx.append(resources)
-    app.add_routes([web.get("/healthz", health), web.get("/v1/models", models),
+    app.add_routes([web.get("/", dashboard), web.get("/healthz", health), web.get("/v1/models", models),
                     web.post("/v1/chat/completions", chat), web.get("/admin/backends", backends),
                     web.get("/admin/stats", stats), web.get("/admin/requests", recent)])
     return app

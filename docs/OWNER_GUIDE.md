@@ -6,6 +6,20 @@ manage weights. Commands below run from the repository root.
 
 ## Inspect routes and usage
 
+Open **http://127.0.0.1:8787/** for the local usage dashboard. Its overview, client
+and model breakdowns, and latest 30 requests all use the selected client/model/
+backend/date filters. Press **应用筛选** to apply changes, **重置** to clear them,
+or **刷新数据** to reload the current view. Optional automatic refresh reloads the
+page every 15 seconds; the default is manual. Dates and request timestamps are UTC.
+The daily request chart covers up to the final 14 calendar days of the selected
+range; summary totals cover the entire selected range. The page reports measured
+token coverage and displays unavailable measurements as a dash. Empty results are
+shown explicitly. Opening the dashboard does not call a model or add usage rows.
+
+The dashboard is server-rendered HTML/CSS with a read-only GET form. All assets
+are served inline by the gateway; there are no external fonts, scripts or services.
+The gateway status badge describes this server, not the inference backend.
+
 ```sh
 curl --noproxy '*' http://127.0.0.1:8787/v1/models
 curl --noproxy '*' http://127.0.0.1:8787/admin/backends

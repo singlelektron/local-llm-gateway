@@ -27,7 +27,11 @@ Nothing is downloaded automatically.
 uv run --frozen llm-gateway --config gateway.local.toml serve
 ```
 
-Expect a foreground listener at `http://127.0.0.1:8787`. In another terminal:
+Expect a foreground listener at `http://127.0.0.1:8787`. Open that address in your
+browser for the usage dashboard: filter by client, model, backend and UTC date,
+inspect recent failures/performance, and optionally refresh every 15 seconds.
+It uses only real SQLite records, with no external assets or frontend build.
+In another terminal:
 
 ```sh
 curl --noproxy '*' http://127.0.0.1:8787/healthz
@@ -47,11 +51,12 @@ the first request while Ollama loads the model.
 Implemented: models/aliases/client defaults, explicit configured backend/model
 selection, native Ollama model discovery and local checks, nonstream and SSE chat,
 cancellation/error accounting, request/response body byte measurements, real token
-and generation-rate parsing, filtered statistics, restart recovery and backups.
+and generation-rate parsing, a local usage dashboard, filtered statistics,
+restart recovery and backups.
 
 Unsupported: tools/function calls, images/audio, embeddings, Responses API, remote
 backends, authentication between local users, cloud providers/costs, automatic
-model downloads/loading controls, dashboard, and MLX/llama.cpp adapters.
+model downloads/loading controls, and MLX/llama.cpp adapters.
 Unsupported request fields fail explicitly. The backend protocol is ready for
 small independently tested adapters; compatibility with other engines is not claimed.
 
