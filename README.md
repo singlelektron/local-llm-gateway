@@ -56,7 +56,7 @@ restart recovery and backups.
 
 Unsupported: tools/function calls, images/audio, embeddings, Responses API, remote
 backends, authentication between local users, cloud providers/costs, automatic
-model downloads/loading controls, and MLX/llama.cpp adapters.
+model downloads or separate preload/unload endpoints, and MLX/llama.cpp adapters.
 Unsupported request fields fail explicitly. The backend protocol is ready for
 small independently tested adapters; compatibility with other engines is not claimed.
 

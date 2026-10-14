@@ -61,6 +61,15 @@ completion is unknown. A closed HTTP connection is not evidence of a completed
 backend operation. The current API is not a drop-in replacement for the broker's
 native Ollama lifecycle checks.
 
+The optional `num_ctx`, `keep_alive` and `model_digest` extensions now support a
+companion broker adapter without changing its fixed context size, residency or
+model identity checks. Send `X-Client-ID: desktop-companion` and the explicit
+configured `backend: ollama` / native model pair. The caller still owns shutdown
+drain and unknown-completion recovery; gateway errors do not prove backend idle.
+Inspect `/healthz` for these extensions before starting the caller. The running
+service must be restarted by its operator after this code is integrated; changing
+an isolated checkout does not update a running server.
+
 Companion remains responsible for approving the context it sends. Gateway route
 configuration and an API key cannot satisfy companion's external-inference
 consent requirement. This gateway MVP has no cloud route or cloud fallback;

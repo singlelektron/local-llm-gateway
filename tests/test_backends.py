@@ -314,20 +314,20 @@ class OllamaBackendTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_inventory_selects_only_safe_fields(self):
         self.payloads["/api/tags"]["models"] = [
-            {"name": "small", "details": {"format": "gguf"}, "template": "private"},
+            {"name": "small", "details": {"format": "gguf"}, "template": "private", "digest": "a" * 64},
             {"name": "renamed", "remote_host": "https://remote.invalid", "details": {"format": "gguf"}},
             {"name": "large:cloud", "details": {"format": "gguf"}},
-            {"name": "unverified"},
+            {"name": "unverified", "digest": "private arbitrary metadata"},
         ]
         self.payloads["/api/ps"]["models"] = [{"name": "small", "irrelevant": "private"}]
         self.assertEqual(
             await self.backend.inventory(),
             {
                 "installed": [
-                    {"name": "small", "local": True},
-                    {"name": "renamed", "local": False},
-                    {"name": "large:cloud", "local": False},
-                    {"name": "unverified", "local": False},
+                    {"name": "small", "digest": "a" * 64, "local": True},
+                    {"name": "renamed", "digest": None, "local": False},
+                    {"name": "large:cloud", "digest": None, "local": False},
+                    {"name": "unverified", "digest": None, "local": False},
                 ],
                 "loaded": ["small"],
             },

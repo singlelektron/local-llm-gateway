@@ -16,10 +16,11 @@ remain refused; no CORS access is enabled. Native HTTP clients remain supported.
   `backend`, `since`, `until`, and `refresh=1` (15-second page reload). Empty filter
   values are ignored. Invalid/duplicate/unknown query parameters return HTML 400
   with a validation message. No model call or statistics write occurs.
-- `GET /healthz`: gateway liveness and active request count.
+- `GET /healthz`: gateway liveness, active request count and supported `chat_extensions`.
 - `GET /v1/models`: configured model aliases (`object: list`). Does not trigger inference.
 - `POST /v1/chat/completions`: requires JSON and configured `X-Client-ID`.
-- `GET /admin/backends`: configured backend IDs, health, installed names/local hints,
+- `GET /admin/backends`: configured backend IDs, health, installed names/local hints and
+  SHA-256 digests (null when absent or invalid),
   loaded model names. Health/discovery calls are not inference usage records.
 - `GET /admin/stats`: totals or `group_by=client_id,model,backend,date` in any combination.
 - `GET /admin/requests`: recent records; `limit=1..1000`, default 50.
@@ -43,6 +44,16 @@ curl --noproxy '*' http://127.0.0.1:8787/v1/chat/completions \
 `seed` 0..2147483647; `stop` string or 1..4 strings, each 1..256 characters. Requests are bounded to 1 MiB
 and 256 messages. Unknown fields, multimodal content, tools and other features fail.
 Ollama thinking is disabled explicitly; hidden reasoning is not an exposed feature.
+
+Optional local extensions preserve a client's bounded inference configuration:
+`num_ctx` is an integer context size from 512 to 131072; `keep_alive` is an integer
+residency duration in seconds from 0 to 3600. Omission preserves the backend's
+defaults. `model_digest` is a lowercase 64-character SHA-256 digest; when supplied,
+the selected backend's `/api/tags` must match it immediately before the positive
+locality check and inference. A mismatch returns 409 `model_identity_changed`
+without sending the messages to inference. This checks a trusted daemon, not an
+atomic lock against concurrent model replacement. These fields do not accept
+arbitrary Ollama options or authorize downloading/loading an absent model.
 
 For manual route selection, use the extension `"backend":"ollama"` together with
 `"model":"qwen2.5-coder:14b-instruct-q6_K"`. That exact pair must occur in the

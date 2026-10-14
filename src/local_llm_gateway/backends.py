@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -24,6 +25,7 @@ MAX_DURATION_NS = 2**63 - 1
 _MESSAGES = {
     "route_not_local": "The configured model could not be verified as local.",
     "model_not_found": "The configured model is not installed on the backend.",
+    "model_identity_changed": "The configured model does not match the requested digest.",
     "backend_unavailable": "The configured inference backend is unavailable.",
     "backend_timeout": "The inference backend timed out.",
     "backend_protocol_error": "The inference backend returned an invalid response.",
@@ -54,7 +56,7 @@ class Event:
 class Backend(Protocol):
     async def inventory(self) -> dict[str, Any]: ...
 
-    async def verify_local(self, model: str) -> None: ...
+    async def verify_local(self, model: str, *, digest: str | None = None) -> None: ...
 
     def chat(
         self, model: str, messages: list, options: dict, stream: bool
@@ -170,9 +172,16 @@ class OllamaBackend:
         except aiohttp.ClientError:
             raise GatewayError(502, "backend_unavailable") from None
 
-    async def verify_local(self, model: str) -> None:
+    async def verify_local(self, model: str, *, digest: str | None = None) -> None:
         if _cloud_name(model):
             raise GatewayError(403, "route_not_local")
+        if digest is not None:
+            tags = await self._request_json("GET", "/api/tags")
+            installed = tags.get("models")
+            if not isinstance(installed, list) or any(not isinstance(item, dict) for item in installed):
+                raise GatewayError(502, "backend_protocol_error")
+            if [item.get("digest") for item in installed if item.get("name") == model] != [digest]:
+                raise GatewayError(409, "model_identity_changed")
         metadata = await self._request_json("POST", "/api/show", {"model": model})
         details, info = metadata.get("details"), metadata.get("model_info")
         if (
@@ -201,9 +210,13 @@ class OllamaBackend:
                     destination.append(name)
                 else:
                     details = model.get("details")
+                    digest = model.get("digest")
+                    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+                        digest = None
                     destination.append(
                         {
                             "name": name,
+                            "digest": digest,
                             # Informational discovery only. Requests must still
                             # pass /api/show immediately before inference.
                             "local": not _cloud_name(name)
@@ -220,10 +233,12 @@ class OllamaBackend:
         body = {
             "model": model,
             "messages": messages,
-            "options": options,
+            "options": {key: value for key, value in options.items() if key != "keep_alive"},
             "stream": stream,
             "think": False,
         }
+        if "keep_alive" in options:
+            body["keep_alive"] = options["keep_alive"]
         try:
             async with self.session.post(
                 self.base_url + "/api/chat", json=body, allow_redirects=False

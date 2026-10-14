@@ -62,7 +62,7 @@ class GatewayHTTPTests(unittest.IsolatedAsyncioTestCase):
 
     async def tags(self, request):
         return web.json_response({"models": [
-            {"name": "tiny:local", "details": {"format": "gguf"}},
+            {"name": "tiny:local", "digest": "a" * 64, "details": {"format": "gguf"}},
             {"name": "remote:cloud", "remote_host": "https://example.invalid"},
         ]})
 
@@ -127,6 +127,46 @@ class GatewayHTTPTests(unittest.IsolatedAsyncioTestCase):
                 return rows
             await asyncio.sleep(.01)
         self.fail(f"Expected {count} finalized rows; got {rows}")
+
+    async def test_fixed_generation_settings_and_digest_reach_only_configured_backend(self):
+        body = {"backend": "ollama", "model": "tiny:local", "model_digest": "a" * 64,
+                "messages": [{"role": "user", "content": "private transport test"}],
+                "num_ctx": 16384, "keep_alive": 120, "max_tokens": 1200,
+                "temperature": .65, "seed": 41}
+        status, raw, _, _ = await self.post(body)
+        self.assertEqual(status, 200, raw)
+        self.assertEqual(self.chat_calls[0]["options"],
+                         {"num_ctx": 16384, "num_predict": 1200, "temperature": .65, "seed": 41})
+        self.assertEqual(self.chat_calls[0]["keep_alive"], 120)
+        self.assertIs(self.chat_calls[0]["think"], False)
+        self.assertNotIn("model_digest", self.chat_calls[0])
+        row = (await self.wait_rows())[0]
+        self.assertEqual((row["client_id"], row["actual_model"], row["status"], row["total_tokens"]),
+                         ("demo", "tiny:local", "success", 10))
+        self.assertNotIn("private transport test", json.dumps(row))
+        body["model_digest"] = "b" * 64
+        status, raw, _, _ = await self.post(body)
+        self.assertEqual(status, 409, raw)
+        self.assertEqual(len(self.chat_calls), 1)
+        rows = await self.wait_rows(2)
+        failed = next(row for row in rows if row["status"] == "failed")
+        self.assertEqual(failed["error_category"], "model_identity_changed")
+        self.assertIsNone(failed["total_tokens"])
+        _, health = await self.get_json("/healthz")
+        self.assertEqual(set(health["chat_extensions"]), {"num_ctx", "keep_alive", "model_digest"})
+        _, inventory = await self.get_json("/admin/backends")
+        self.assertEqual(inventory["backends"][0]["installed"][0]["digest"], "a" * 64)
+
+    async def test_invalid_transport_extensions_never_start_inference(self):
+        for key, values in {"num_ctx": [True, 511, 131073, "16384"],
+                            "keep_alive": [True, -1, 3601, "2m"],
+                            "model_digest": [None, "a" * 63, "G" * 64]}.items():
+            for value in values:
+                with self.subTest(key=key, value=value):
+                    status, raw, _, _ = await self.post({"messages": [{"role": "user", "content": "test"}], key: value})
+                    self.assertEqual(status, 400, raw)
+        self.assertEqual(self.chat_calls, [])
+        self.assertEqual(self.show_calls, [])
 
     async def test_nonstream_exact_bytes_usage_defaults_and_manual_route(self):
         status, raw, headers, sent = await self.post()
