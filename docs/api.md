@@ -6,6 +6,10 @@ Error messages are fixed categories, never upstream text. A chat response includ
 `X-Request-ID`, also stored as `id`. Authorization headers are neither used nor
 forwarded. No client-controlled upstream headers or URLs are accepted.
 
+Browsers may navigate directly to the five read-only GET endpoints below. Browser
+fetch/XHR, iframe navigation, Origin-bearing requests and inference submissions
+remain refused; no CORS access is enabled. Native HTTP clients remain supported.
+
 ## Endpoints
 
 - `GET /healthz`: gateway liveness and active request count.

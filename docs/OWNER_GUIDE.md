@@ -85,5 +85,7 @@ For defense in depth, Ollama supports `OLLAMA_NO_CLOUD=1`; see the
 [official FAQ](https://docs.ollama.com/faq#how-do-i-disable-ollamas-cloud-features).
 Configure/restart Ollama deliberately if desired; this project does not change the
 existing service. Do not expose this unauthenticated MVP through a reverse proxy,
-port forwarding or remote bind. Native local clients are supported; browser Origin
-requests are refused. Local processes can spoof attribution IDs.
+port forwarding or remote bind. The read-only inspection endpoints can be opened
+directly in a browser as top-level pages. Browser script requests, embedded pages,
+requests with an Origin header and browser inference submissions are refused.
+Local processes can spoof attribution IDs.

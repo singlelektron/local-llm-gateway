@@ -348,6 +348,35 @@ class GatewayHTTPTests(unittest.IsolatedAsyncioTestCase):
         rows = await self.wait_rows(2)
         self.assertTrue(all(row["error_category"] == "invalid_request" for row in rows))
 
+    async def test_browser_can_navigate_read_only_pages_but_cannot_infer_or_fetch(self):
+        navigation = {"Sec-Fetch-Site": "none", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"}
+        for site in ("none", "same-origin", "cross-site"):
+            for path in ("/healthz", "/v1/models", "/admin/backends", "/admin/stats?group_by=client_id,model", "/admin/requests"):
+                with self.subTest(site=site, path=path):
+                    async with self.client.get(self.gateway.make_url(path), headers={**navigation, "Sec-Fetch-Site": site}) as response:
+                        self.assertEqual(response.status, 200)
+                        self.assertNotIn("error", await response.json())
+                        self.assertNotIn("Access-Control-Allow-Origin", response.headers)
+        denied = (
+            {**navigation, "Origin": "https://example.invalid"},
+            {**navigation, "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty"},
+            {**navigation, "Sec-Fetch-Dest": "iframe"},
+            {"Sec-Fetch-Mode": "cors"},
+            {**navigation, "Host": "rebinding.example"},
+        )
+        for headers in denied:
+            async with self.client.get(self.gateway.make_url("/admin/stats"), headers=headers) as response:
+                self.assertEqual(response.status, 403)
+        for path in ("/v1/chat/completions", "/unknown"):
+            async with self.client.get(self.gateway.make_url(path), headers=navigation) as response:
+                self.assertEqual(response.status, 403)
+        for headers in (navigation, {"Origin": "http://127.0.0.1"},
+                        {"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty"}):
+            self.assertEqual((await self.post(headers=headers))[0], 403)
+        self.assertEqual(self.chat_calls, [])
+        self.assertEqual(self.show_calls, [])
+        self.assertEqual(self.app[STORE].recent(), [])
+
     async def test_health_discovery_filters_and_browser_boundary(self):
         status, health = await self.get_json("/healthz")
         self.assertEqual((status, health["status"]), (200, "ok"))

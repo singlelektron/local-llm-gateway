@@ -19,6 +19,7 @@ STORE = web.AppKey("store", Store)
 BACKENDS = web.AppKey("backends", dict)
 ACTIVE = web.AppKey("active", dict)
 MAX_BODY = 1024 * 1024
+READ_ONLY_PATHS = frozenset({"/healthz", "/v1/models", "/admin/backends", "/admin/stats", "/admin/requests"})
 
 
 def encode(data):
@@ -88,8 +89,16 @@ def validate(body, config, client):
 @web.middleware
 async def boundary(request, handler):
     try:
-        # No browser API in this MVP. Reject origins and DNS rebinding Host values.
-        if "Origin" in request.headers or "Sec-Fetch-Site" in request.headers:
+        # Permit direct, top-level viewing of known read-only endpoints. Browser
+        # fetches, embedded pages and inference submissions remain unsupported.
+        browser_navigation = (
+            request.method == "GET"
+            and request.path in READ_ONLY_PATHS
+            and request.headers.get("Sec-Fetch-Mode") == "navigate"
+            and request.headers.get("Sec-Fetch-Dest") == "document"
+        )
+        fetch_metadata = any(name.lower().startswith("sec-fetch-") for name in request.headers)
+        if "Origin" in request.headers or (fetch_metadata and not browser_navigation):
             fail("browser_access_denied", 403)
         try:
             loopback_host(request.url.host)
