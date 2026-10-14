@@ -80,6 +80,16 @@ class OllamaBackendTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(body["stream"])
         self.assertIs(body["think"], False)
 
+    async def test_digest_uses_default_tag_without_confusing_registry_port(self):
+        for name in ("small", "team/small", "localhost:5000/team/small", "small:custom"):
+            canonical = name if name == "small:custom" else name + ":latest"
+            self.payloads["/api/tags"] = {"models": [{"name": canonical, "digest": "a" * 64}]}
+            with self.subTest(name=name):
+                await self.backend.verify_local(name, digest="a" * 64)
+                with self.assertRaises(GatewayError) as caught:
+                    await self.backend.verify_local(name, digest="b" * 64)
+                self.assertEqual(caught.exception.code, "model_identity_changed")
+
     async def test_missing_metrics_remain_unavailable(self):
         self.payloads["/api/chat"] = {"message": {"content": "hi"}, "done": True}
         result = (await self.collect())[0]
@@ -314,20 +324,20 @@ class OllamaBackendTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_inventory_selects_only_safe_fields(self):
         self.payloads["/api/tags"]["models"] = [
-            {"name": "small", "details": {"format": "gguf"}, "template": "private"},
+            {"name": "small", "details": {"format": "gguf"}, "template": "private", "digest": "a" * 64},
             {"name": "renamed", "remote_host": "https://remote.invalid", "details": {"format": "gguf"}},
             {"name": "large:cloud", "details": {"format": "gguf"}},
-            {"name": "unverified"},
+            {"name": "unverified", "digest": "private arbitrary metadata"},
         ]
         self.payloads["/api/ps"]["models"] = [{"name": "small", "irrelevant": "private"}]
         self.assertEqual(
             await self.backend.inventory(),
             {
                 "installed": [
-                    {"name": "small", "local": True},
-                    {"name": "renamed", "local": False},
-                    {"name": "large:cloud", "local": False},
-                    {"name": "unverified", "local": False},
+                    {"name": "small", "digest": "a" * 64, "local": True},
+                    {"name": "renamed", "digest": None, "local": False},
+                    {"name": "large:cloud", "digest": None, "local": False},
+                    {"name": "unverified", "digest": None, "local": False},
                 ],
                 "loaded": ["small"],
             },

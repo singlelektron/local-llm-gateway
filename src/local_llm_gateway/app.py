@@ -4,6 +4,7 @@ from contextlib import aclosing
 from datetime import datetime, timezone
 import json
 import math
+import re
 import time
 import uuid
 
@@ -36,7 +37,7 @@ def fail(code="invalid_request", status=400):
 
 
 def validate(body, config, client):
-    if not isinstance(body, dict) or set(body) - {"model", "messages", "stream", "stream_options", "temperature", "top_p", "max_tokens", "stop", "seed", "backend"}:
+    if not isinstance(body, dict) or set(body) - {"model", "messages", "stream", "stream_options", "temperature", "top_p", "max_tokens", "stop", "seed", "backend", "num_ctx", "keep_alive", "model_digest"}:
         fail("unsupported_request_fields")
     if type(body.get("stream", False)) is not bool:
         fail()
@@ -64,6 +65,15 @@ def validate(body, config, client):
         if not isinstance(message, dict) or set(message) != {"role", "content"} or message["role"] not in ("system", "user", "assistant") or not isinstance(message["content"], str):
             fail("text_messages_required")
     options = {}
+    for key, lower, upper in (("num_ctx", 512, 131072), ("keep_alive", 0, 3600)):
+        if key in body:
+            if type(body[key]) is not int or not lower <= body[key] <= upper:
+                fail()
+            options[key] = body[key]
+    if "model_digest" in body:
+        if not isinstance(body["model_digest"], str) or not re.fullmatch(r"[0-9a-f]{64}", body["model_digest"]):
+            fail()
+        options["model_digest"] = body["model_digest"]
     for key, upper in (("temperature", 2), ("top_p", 1)):
         if key in body:
             val = body[key]
@@ -180,7 +190,7 @@ async def chat(request):
         active["count"] += 1
         admitted = True
         backend = request.app[BACKENDS][route["backend"]]
-        await backend.verify_local(route["model"])
+        await backend.verify_local(route["model"], digest=options.pop("model_digest", None))
         content = []
         done = False
         finish_reason = "stop"
@@ -249,7 +259,8 @@ async def chat(request):
 
 
 async def health(request):
-    return web.json_response({"status": "ok", "scope": "gateway", "active_requests": request.app[ACTIVE]["count"]})
+    return web.json_response({"status": "ok", "scope": "gateway", "active_requests": request.app[ACTIVE]["count"],
+                              "chat_extensions": ["num_ctx", "keep_alive", "model_digest"]})
 
 
 async def models(request):
