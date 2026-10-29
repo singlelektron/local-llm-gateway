@@ -43,8 +43,14 @@ curl --noproxy '*' 'http://127.0.0.1:8787/admin/requests?limit=5'
 
 Expect `status: ok`, real model responses, two client groups, and backend-reported
 token counts. Stop with **Ctrl+C**, run the server again, and repeat the statistics
-query: the records remain in `.data/usage.sqlite3`. Model generation may be slow on
-the first request while Ollama loads the model.
+query: the records remain in the same local database. By default it is stored
+outside the repository at `~/.local/share/local-llm-gateway/usage.sqlite3`
+(`$XDG_DATA_HOME/local-llm-gateway/usage.sqlite3` if an absolute XDG data directory
+is configured). Restarting, updating or replacing the checkout does not reset it.
+Existing explicit database settings are preserved; see the
+[migration steps](docs/OWNER_GUIDE.md#migrate-an-existing-repository-database)
+for an older `.data/usage.sqlite3`. Model generation may be slow on the first
+request while Ollama loads the model.
 
 ## Scope
 

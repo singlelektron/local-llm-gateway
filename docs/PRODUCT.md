@@ -46,6 +46,9 @@ LiteLLM is unnecessary when only native Ollama is supported. SQLite writes are s
 synchronous transactions to ensure cancellation cannot interrupt accounting; this
 tradeoff targets personal usage, not high-throughput shared hosting. One server
 process owns one database. Default concurrency is four with immediate 429 overload.
+The default database lives in the user's data directory outside the checkout.
+Startup reopens it without resetting completed records. Explicit paths remain
+supported, and migration from an older repository database preserves the source.
 
 The owner requested a local statistics webpage after the initial MVP. A small
 server-rendered dashboard at `/` adds overview metrics, client/model breakdowns,

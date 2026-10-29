@@ -1,6 +1,7 @@
 """Strict administrator-owned routing configuration."""
 from dataclasses import dataclass
 import ipaddress
+import os
 from pathlib import Path
 import re
 import tomllib
@@ -46,6 +47,26 @@ def positive_int(value, maximum):
     return value
 
 
+class LegacyDatabaseError(ValueError):
+    """An old implicit database needs an explicit migration before switching."""
+
+
+def database_path(server, base):
+    if "database" in server:
+        value = server["database"]
+        if not isinstance(value, str) or not value.strip() or value == ":memory:":
+            raise ValueError("Configure a persistent database file")
+        return Path(base) / Path(value).expanduser()
+    # Ignore relative XDG values so a changed working directory cannot select a
+    # fresh database. Configured paths retain their existing relative semantics.
+    xdg = os.environ.get("XDG_DATA_HOME", "")
+    root = Path(xdg) if xdg and Path(xdg).is_absolute() else Path.home() / ".local" / "share"
+    target = root / "local-llm-gateway" / "usage.sqlite3"
+    if (Path(base) / ".data" / "usage.sqlite3").exists() and not target.exists():
+        raise LegacyDatabaseError("Migrate the legacy statistics database first")
+    return target
+
+
 @dataclass(frozen=True)
 class Config:
     host: str
@@ -85,7 +106,7 @@ class Config:
                 raise ValueError("Client default references an unknown alias")
         return cls(loopback_host(server.get("host", "127.0.0.1")),
                    positive_int(server.get("port", 8787), 65535),
-                   Path(base) / server.get("database", ".data/usage.sqlite3"),
+                   database_path(server, base),
                    positive_int(server.get("timeout_seconds", 180), 3600),
                    positive_int(server.get("max_concurrent", 4), 128),
                    normalized, models, clients)

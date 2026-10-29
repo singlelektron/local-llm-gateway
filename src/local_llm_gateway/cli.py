@@ -6,7 +6,7 @@ import sys
 
 from aiohttp import web
 from .app import create_app
-from .config import Config
+from .config import Config, LegacyDatabaseError
 from .storage import Store
 
 
@@ -32,8 +32,13 @@ def main():
                 store.close()
             print("Backup created")
         else:
+            print(f"Statistics database: {config.database.resolve()}", flush=True)
             web.run_app(create_app(config), host=config.host, port=config.port,
                         access_log=None, handler_cancellation=True, shutdown_timeout=10)
+    except LegacyDatabaseError:
+        print("Gateway found a legacy .data/usage.sqlite3 database. Preserve the database setting "
+              "or follow the migration steps in docs/OWNER_GUIDE.md before starting.", file=sys.stderr)
+        raise SystemExit(1)
     except (OSError, ValueError, RuntimeError):
         print("Gateway could not start: check configuration, database ownership and listening port.", file=sys.stderr)
         raise SystemExit(1)
