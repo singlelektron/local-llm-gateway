@@ -45,11 +45,34 @@ not hidden reasoning. Dates are UTC, including on computers in other time zones.
 
 Ctrl+C stops a foreground gateway, allowing up to ten seconds for active handlers.
 Calls interrupted by forced handler shutdown record `interrupted` / `gateway_shutdown`. No background service is installed automatically.
-The database path is relative to the configuration file; default `.data/usage.sqlite3`.
+With `server.database` omitted, the database is
+`~/.local/share/local-llm-gateway/usage.sqlite3`. An absolute `XDG_DATA_HOME`
+changes the data root; empty or relative values are ignored. This location is
+independent of the checkout, current working directory and config location.
+Keep the same data directory across launches. The startup message prints the
+resolved database path. Starting or restarting opens the existing database;
+it never clears completed records or replaces a damaged database with an empty one.
+
+Explicit `server.database` settings still take precedence. Relative paths remain
+relative to the configuration file; `~` is expanded, but shell variables in TOML
+are not. Existing repository-relative configurations require the migration below
+to survive checkout deletion or replacement.
 The database contains timing, labels, model names and counts, which can still reveal
 usage patterns. The CLI uses private creation permissions. Keep the database and
 local config out of Git. There is no automatic retention deletion; inspect disk
 usage and archive old databases manually after shutdown.
+
+To preserve routing configuration outside the checkout too, copy the local config
+once and use its absolute path on subsequent starts:
+
+```sh
+install -d -m 700 "$HOME/.config/local-llm-gateway"
+cp -n gateway.local.toml "$HOME/.config/local-llm-gateway/gateway.toml"
+uv run --frozen llm-gateway --config "$HOME/.config/local-llm-gateway/gateway.toml" serve
+```
+
+Use this after migrating any relative database setting. Config and database files
+remain local; the gateway has no statistics upload, telemetry or cloud sync.
 
 A dropped client is `cancelled`; a stream that emitted content then lost its backend
 is `partial`. An unclean gateway exit leaves a durable initial row; reopening marks
@@ -62,7 +85,10 @@ is performed. Closing an HTTP connection cannot prove Ollama stopped computing.
 Stop the gateway first. Use a new backup filename:
 
 ```sh
-uv run --frozen llm-gateway --config gateway.local.toml backup .data/usage-backup.sqlite3
+gateway_data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/local-llm-gateway"
+install -d -m 700 "$gateway_data_dir/backups"
+uv run --frozen llm-gateway --config gateway.local.toml backup \
+  "$gateway_data_dir/backups/usage-$(date -u +%Y%m%dT%H%M%SZ).sqlite3"
 ```
 
 Expect `Backup created`. Existing destinations are refused. This uses SQLite's
@@ -70,15 +96,38 @@ consistent backup API; do not copy only an active WAL database's main file.
 To inspect a backup without replacing live data:
 
 ```sh
-cp -n .data/usage-backup.sqlite3 .data/usage-restored.sqlite3
+# Replace the backup filename with the one just created.
+cp -n "$gateway_data_dir/backups/usage-TIMESTAMP.sqlite3" "$gateway_data_dir/usage-restored.sqlite3"
 cp -n gateway.local.toml gateway.restore.toml
 ```
 
-Set `server.database = ".data/usage-restored.sqlite3"` in `gateway.restore.toml`,
+Set `server.database` to the absolute restored file path in `gateway.restore.toml`,
 then run `uv run --frozen llm-gateway --config gateway.restore.toml serve` and query
 stats. Use a fresh restored filename on repeated checks. Keep the original database;
 never replace a running database or remove its WAL/SHM files. Automated tests rehearse
 backup/reopen and actual process-crash recovery on disposable data.
+
+### Migrate an existing repository database
+
+Stop the gateway with Ctrl+C first. Keep the old `server.database` setting while
+creating the new database with the existing consistent backup command. If the
+old config omitted this setting, first add `database = ".data/usage.sqlite3"`
+under `[server]` to explicitly select the existing repository database:
+
+```sh
+gateway_data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/local-llm-gateway"
+install -d -m 700 "$gateway_data_dir"
+uv run --frozen llm-gateway --config gateway.local.toml backup "$gateway_data_dir/usage.sqlite3"
+```
+
+Expect `Backup created`. If the destination already exists, the command refuses
+to overwrite it: inspect both databases before choosing which one to use.
+After a successful copy, set `server.database` in `gateway.local.toml` to the
+absolute destination path (or remove the setting to use the default), then start
+the gateway and check the same request IDs and totals. Keep the original database
+as a fallback. Never replace a running database or copy only its main WAL file.
+If an old implicit `.data/usage.sqlite3` exists and the new default does not,
+startup stops with migration guidance instead of opening an empty replacement.
 
 ## Troubleshooting
 

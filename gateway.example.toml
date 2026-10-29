@@ -2,7 +2,10 @@
 [server]
 host = "127.0.0.1"
 port = 8787
-database = ".data/usage.sqlite3"
+# Stored outside the repository by default:
+# ${XDG_DATA_HOME:-$HOME/.local/share}/local-llm-gateway/usage.sqlite3
+# Optional override (relative paths are relative to this config file):
+# database = "/absolute/path/to/usage.sqlite3"
 timeout_seconds = 180
 max_concurrent = 4
 
