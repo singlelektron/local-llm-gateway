@@ -85,7 +85,10 @@ is performed. Closing an HTTP connection cannot prove Ollama stopped computing.
 Stop the gateway first. Use a new backup filename:
 
 ```sh
-gateway_data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/local-llm-gateway"
+case "${XDG_DATA_HOME-}" in
+  /*) gateway_data_dir="$XDG_DATA_HOME/local-llm-gateway" ;;
+  *) gateway_data_dir="$HOME/.local/share/local-llm-gateway" ;;
+esac
 install -d -m 700 "$gateway_data_dir/backups"
 uv run --frozen llm-gateway --config gateway.local.toml backup \
   "$gateway_data_dir/backups/usage-$(date -u +%Y%m%dT%H%M%SZ).sqlite3"
@@ -115,7 +118,10 @@ old config omitted this setting, first add `database = ".data/usage.sqlite3"`
 under `[server]` to explicitly select the existing repository database:
 
 ```sh
-gateway_data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/local-llm-gateway"
+case "${XDG_DATA_HOME-}" in
+  /*) gateway_data_dir="$XDG_DATA_HOME/local-llm-gateway" ;;
+  *) gateway_data_dir="$HOME/.local/share/local-llm-gateway" ;;
+esac
 install -d -m 700 "$gateway_data_dir"
 uv run --frozen llm-gateway --config gateway.local.toml backup "$gateway_data_dir/usage.sqlite3"
 ```
